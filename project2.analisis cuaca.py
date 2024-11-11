@@ -1,0 +1,97 @@
+import requests
+import pandas as pd
+
+# Dictionary untuk menerjemahkan deskripsi cuaca dari Bahasa Inggris ke Bahasa Indonesia
+deskripsi_cuaca_id = {
+    'clear sky': 'cerah',
+    'few clouds': 'berawan',
+    'overcast clouds': 'mendung',
+    'moderate rain': 'hujan sedang',
+    'light rain': 'hujan ringan',
+    'shower rain': 'hujan gerimis',
+    'rain': 'hujan',
+    'thunderstorm': 'badai petir',
+    'snow': 'salju',
+    'mist': 'kabut'
+}
+
+def ambil_data_cuaca(kota, api_key):
+    """
+    Mengambil data cuaca dari API OpenWeather berdasarkan nama kota dan API key.
+    
+    Args:
+        kota (str): Nama kota untuk mencari data cuaca.
+        api_key (str): Kunci API untuk mengakses layanan OpenWeather.
+        
+    Returns:
+        dict: Data cuaca dalam format JSON jika berhasil, None jika gagal.
+    """
+    url = f'https://api.openweathermap.org/data/2.5/forecast?q={kota}&appid={api_key}&units=metric'  # Menambahkan units=metric untuk suhu dalam Celcius
+    response = requests.get(url)
+    if response.status_code == 200:
+        data = response.json()
+        return data
+    else:
+        print(f'Error {response.status_code}: {response.text}')
+        return None
+
+def analisis_cuaca(data):
+    """
+    Menganalisis data cuaca untuk menghasilkan DataFrame dengan informasi harian.
+    
+    Args:
+        data (dict): Data cuaca dalam format JSON.
+        
+    Returns:
+        pd.DataFrame: DataFrame yang berisi tanggal, temperatur rata-rata, kelembapan rata-rata, dan deskripsi cuaca.
+    """
+    if data is None:
+        return None
+    
+    forecast_list = data.get('list', [])
+    dates = []
+    temperatures = []
+    humidities = []
+    weather_descriptions = []
+
+    for item in forecast_list:
+        date = item['dt_txt'].split(' ')[0]  # Mengambil tanggal dari format datetime
+        dates.append(date)
+        temperatures.append(item['main']['temp'])  # Temperatur dalam Celsius
+        humidities.append(item['main']['humidity'])
+        desc = item['weather'][0]['description']
+        weather_descriptions.append(deskripsi_cuaca_id.get(desc, desc))  # Menerjemahkan deskripsi cuaca
+
+    # Membuat DataFrame untuk data cuaca
+    df = pd.DataFrame({
+        'Tanggal': dates,
+        'Temperatur (°C)': temperatures,
+        'Kelembapan (%)': humidities,
+        'Deskripsi Cuaca': weather_descriptions
+    })
+
+    # Agregasi harian
+    df_daily = df.groupby('Tanggal').agg({
+        'Temperatur (°C)': 'mean',  # Menghitung rata-rata temperatur
+        'Kelembapan (%)': 'mean',    # Menghitung rata-rata kelembapan
+        'Deskripsi Cuaca': lambda x: x.mode()[0]  # Mengambil deskripsi cuaca yang paling umum
+    }).reset_index()
+
+    return df_daily
+
+def main():
+    """
+    Fungsi utama yang meminta input nama kota dan menampilkan hasil analisis cuaca.
+    """
+    kota = input('Masukkan nama kota: ')
+    api_key = '28823f263295a7018cc7fbe44f9bce2a'  # Ganti dengan kunci API Anda
+
+    data = ambil_data_cuaca(kota, api_key)  # Mengambil data cuaca
+    df = analisis_cuaca(data)  # Menganalisis data cuaca
+
+    if df is not None:
+        print("Hasil Analisis Cuaca:")
+        print(df)  # Menampilkan DataFrame dengan hasil analisis
+
+if __name__ == '__main__':
+    main()
